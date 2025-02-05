@@ -15,7 +15,7 @@ input_size = (28, 28)
 num_layers = 2
 wavelength = 400E-9
 distance = 0.1
-num_epochs = 200  # Максимальное количество эпох
+num_epochs = 1000  # Максимальное количество эпох
 lr = 0.001
 loss_threshold = 0.02  # Значение Loss, при котором остановится обучение
 
