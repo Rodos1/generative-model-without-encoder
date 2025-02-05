@@ -1,0 +1,66 @@
+import torch
+import torch.nn as nn
+import torch.fft as fft
+
+
+class PhaseModulator(nn.Module):
+    def __init__(self, input_size):
+        super().__init__()
+        self.phase = nn.Parameter(torch.rand(input_size) * 2 * torch.pi)
+
+    def forward(self, x):
+        phase_shift = torch.cos(self.phase) + 1j * torch.sin(self.phase)
+        return x * phase_shift
+
+class AmplitudeModulator(nn.Module):
+    def __init__(self, input_size):
+        super().__init__()
+        self.amplitude = nn.Parameter(torch.rand(input_size))
+
+    def forward(self, x):
+        amplitude_modulation = self.amplitude
+        return x * amplitude_modulation
+
+
+class Propagator(nn.Module):
+    def __init__(self, input_size, pixel_size, wavelength, distance):
+        super().__init__()
+        self.input_size = input_size
+        self.pixel_size = pixel_size
+        self.wavelength = wavelength
+        self.distance = distance
+
+        k = 2 * torch.pi / wavelength
+        fx = torch.fft.fftfreq(input_size, d=pixel_size)
+        fy = torch.fft.fftfreq(input_size, d=pixel_size)
+        FX, FY = torch.meshgrid(fx, fy, indexing='ij')
+
+        #Фильтр дифракции Френеля
+        self.H = torch.exp(-1j * k * distance * torch.sqrt(1 - (wavelength * FX) ** 2 - (wavelength * FY) ** 2))
+
+    def forward(self, x):
+        x_ft = fft.fft2(x)  #Прямое FT
+        x_ft_propagated = x_ft * self.H.to(x.device)  #Применение дифракционного фильтра
+        x_propagated = fft.ifft2(x_ft_propagated)  #Обратное FT
+        return x_propagated
+
+
+class ONNGenerator(nn.Module):
+    def __init__(self, input_size, num_layers, wavelength, distance, pixel_size=1e-6, modulator_type='amplitude'):
+        super().__init__()
+        self.layers = nn.ModuleList()
+
+        for _ in range(num_layers):
+            if modulator_type == 'phase':
+                self.layers.append(PhaseModulator(input_size))
+            elif modulator_type == 'amplitude':
+                self.layers.append(AmplitudeModulator(input_size))
+            else:
+                raise ValueError("Unknown modulator type. Choose either 'phase' or 'amplitude'.")
+
+            self.layers.append(Propagator(input_size[0], pixel_size, wavelength, distance))
+
+    def forward(self, x):
+        for layer in self.layers:
+            x = layer(x)
+        return torch.abs(x)
